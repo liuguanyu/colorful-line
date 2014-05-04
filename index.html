@@ -1,1 +1,453 @@
-My GitHub Page
+
+<!DOCTYPE html>
+
+<html> 
+    <head>
+	    <meta charset="utf-8" />
+        <title>彩色连线</title>
+        <style type="text/css"> 
+        td{font-size:14px;cursor:pointer;}
+        </style>
+    </head>
+    <body bgcolor="#999999">
+        <table width="100%">
+            <tr>
+                <td width="450" height="450" bgcolor="#000000" id="bg" valign="top">
+                </td>
+                <td width="450" height="450" bgcolor="#000000" id="bgpause" style="display:none">
+                    &nbsp;
+                </td>
+                <td valign="top" align="right" id="menu">
+                    <table width="96%" style="line-height:18px;text-align:left;">
+                        <tr>
+                           <td colspan="2">彩色连线 version1.0</td>
+                        </tr>
+                        <tr>
+                           <td colspan="2"><fieldset><legend>游戏说明</legend>一时想不起怎么称呼这个游戏。姑且叫做“彩色连线”吧。<br>游戏规则很简单：<ol><li>点击有颜色的方块。</li><li>如果点击方块的东西南北邻有同色方块，将一同消除，而相邻同色方块的东西南北邻如果仍有相同的颜色，也会一起消除。</li><li>如果消除的方块上面有未消除的方块，将下落。</li><li>如果某列的方块全部被消除，右侧的方块列会补充上来。</li><li>直到点击不能删除方块，游戏结束。在结束之前，有5次机会先后用右键点击两个色块，以交换他们的颜色。</li><li>以剩余方块越少，点击次数越小，耗用时间越少，剩余交换次数越多，越优秀。</li></ol></fieldset></td>
+                        </tr>                        
+                        
+                        <tr>
+                           <td>颜色数</td>
+                           <td id="colorTypeShow">&nbsp;</td>
+                        </tr>                        
+                        <tr>
+                           <td>点击次数</td>
+                           <td id="clickTimeShow">&nbsp;</td>
+                        </tr>  
+                        <tr>
+                           <td>剩余方块数</td>
+                           <td id="leftInMatrixShow"></td>
+                        </tr> 
+                        <tr>
+                           <td>还剩交换数</td>
+                           <td id="leftSwitchShow"></td>
+                        </tr>                         
+                        <tr>
+                           <td>用时</td>
+                           <td id="timeShow">0</td>
+                        </tr>   
+                        <tr>
+                           <td colspan="2">
+                               <input type="button" value="新建" onclick="init();">
+                               <input type="button" value="暂停" id="pause" onclick="switchTimer(0);">
+                               <input type="button" value="恢复" id="revert" onclick="switchTimer(1);">
+                           </td>
+                        </tr>     
+                         <tr>
+                           <td colspan="2" align="right">
+                               <b>Powered by 非主流童话</b>
+                           </td>
+                        </tr>                                            
+                    </table>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2" id="tmpshow">&nbsp;</td>
+            </tr>
+        </table>
+
+        <script>
+            var matrix = new Array();
+            var color = new Array("#FF0000","#00FF00","#0000FF","#EFAC67");
+            color[-1] = "#000000";
+            var str = "";
+            
+            var clickTime ;
+            var leftInMargin ;
+
+            var upline;
+            var rightline;
+            var leftline;
+            var bottomline;
+
+            var tmp = new Array();
+
+            var time;
+            var validClick = 1;
+            var pauseHandle ;
+            var switchColor;
+            var switchColorHandle;
+            var switchStatus;
+            var switchColorLeftTime;
+            var switchTmpItem;
+            
+            init();
+
+            function item(p1,p2){
+                this.i = p1;
+                this.j = p2;
+            }
+
+            function init(){
+                clearSwitch();
+                upline = new Array(-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1);
+                rightline = 15;
+                leftline = -1;
+                bottomline = 15;
+                
+                str = "";
+                str += "<table cellpadding='0' cellspacing='0'>";
+
+                for (i=0;i<15;++i){
+                    str += "<tr>";
+
+                    matrix[i] = new Array();
+                    for(j=0;j<15;++j){
+                        key = Math.floor(Math.random()*color.length);
+                        str += "<td width='30' height='30' style='background:"+color[key]+";cursor:hand;' id='"+i+"_"+j+"' onclick='clickMatrix("+i+","+j+");' onmousedown='if (event.button == 2) {rightClickMatrix("+i+","+j+");}'  oncontextmenu='return false'>&nbsp;</td>";
+
+                        matrix[i][j] = key;
+                    }
+
+                    str += "</tr>"   ;
+                }
+
+                str += "</table>";
+                
+                document.getElementById("bg").innerHTML = str;
+                
+                clickTime = 0;
+                leftInMatrix = 225;
+                
+                time = 0;
+                switchTimer(0);
+                switchTimer(1);
+                
+                printMenu();
+                
+                switchColorLeftTime = 5;
+                switchStatus = 0;
+                
+                printSwitch();
+            }
+
+            function clickMatrix(p1,p2){
+                if (!validClick){return;}
+                clearSwitch();
+                var color_key = matrix[p1][p2];
+
+                color2Stack(p1,p2,color_key);
+
+                popStack();
+
+                scanHorizon();
+                
+                ++clickTime;
+
+                printMenu();
+
+                if (leftInMatrix == 0){
+                    endGame();
+                    alert("真牛！消除了全部方块！");
+                }
+                else if (isEnd()){
+                    endGame();
+                    alert('游戏结束！');
+                }
+            }
+            
+            function rightClickMatrix(p1,p2){
+                if (!validClick){return;}
+                if (matrix[p1][p2] == -1){return ;}
+                
+                if (switchColorLeftTime <= 0){return ;}
+                
+                if (switchStatus == 0 ){
+                    switchColor = matrix[p1][p2];
+                    switchTmpItem = new item(p1,p2);
+                    switchColorHandle = setInterval("twinkle("+p1+","+p2+")",130);  
+                    switchStatus = 1;
+                }
+                else{
+                    clearInterval(switchColorHandle);
+                    --switchColorLeftTime;
+                    switchColorAndKey(p1,p2);
+                    switchStatus = 0;
+                    printSwitch();
+                    switchTmpItem = null;
+                    switchColor = null;
+                }
+            }
+            
+            function twinkle(p1,p2){
+                var gc = getColor(p1,p2);
+                (gc == "#000000" || gc.replace(/\s+/g,"") == "rgb(0,0,0)") 
+			        ? setColor(p1,p2,color[matrix[p1][p2]]) 
+                    : setColor(p1,p2,"#000000");                
+            }
+            
+            function switchColorAndKey(p1,p2){
+               var tmpcolor = matrix[p1][p2];
+               matrix[p1][p2] =  matrix[switchTmpItem.i][switchTmpItem.j];
+               matrix[switchTmpItem.i][switchTmpItem.j] = tmpcolor;
+               setColor(p1,p2,color[matrix[p1][p2]]);
+               setColor(switchTmpItem.i,switchTmpItem.j,color[matrix[switchTmpItem.i][switchTmpItem.j]]);
+            }
+
+            function color2Stack(p1,p2,pColorKey){
+                if (typeof(upline[p2]) =='undefined' || p1 <= upline[p2]){
+                    return ;
+                }
+
+                if (p1 >= bottomline){
+                    return ;
+                }
+
+                if (p2 <= leftline) {
+                return ;}
+
+                if (p2 >= rightline) {
+                return ;}
+
+                if (inStack(new item(p1,p2),tmp)){
+                return ;}
+
+                if (matrix[p1][p2] != pColorKey) {
+                return ;}
+
+                tmp.push(new item(p1,p2));
+
+                color2Stack(p1-1,p2,pColorKey);
+
+                color2Stack(p1,p2+1,pColorKey);
+
+                color2Stack(p1+1,p2,pColorKey);
+
+                color2Stack(p1,p2-1,pColorKey);
+            }
+
+            function inStack(pItem , pStack){
+                for (var k in pStack){
+                    if ((pItem.i == pStack[k].i) && (pItem.j == pStack[k].j)){
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            function popStack(){
+                var downArray = new Array();
+                if (tmp.length <= 0){}
+                else if (tmp.length == 1){
+                    tmp.pop();
+                }
+                else{
+                    var blankCount = new Array();
+                    leftInMatrix -= tmp.length;
+                    while (tmp.length>0){
+                        piece = tmp.pop();
+
+                        matrix[piece.i][piece.j] = -1;
+                       
+                        for(j=0;j<downArray.length;++j){
+                            if (piece.j == downArray[j]){
+                                break;
+                            }
+                        }
+                        
+                        if (j == downArray.length ){downArray.push(piece.j);}
+                        
+                        if (typeof(blankCount[piece.j]) == 'undefined'){
+                            blankCount[piece.j] = 1;
+                        }
+                        else{
+                            ++blankCount[piece.j];
+                        }
+                    }
+                    for (j = 0 ; j < downArray.length; ++j){
+                        var colArray = new Array();
+                        var unBlankArray = new Array();
+                        var blankArray = new Array();
+
+                        for(i=0; i<15 ; ++i){
+                            colArray[i] = matrix[i][downArray[j]];
+                        }
+                        
+                        for(i=0; i<15 ; ++i){
+                            if (colArray[i] == -1){
+                                blankArray.push(-1);
+                            }
+                            else{
+                                unBlankArray.push(colArray[i]);
+                            }
+                        }
+                        
+                        colArray = blankArray.concat(unBlankArray);
+
+                        for(i=0; i<15 ; ++i){
+                            matrix[i][downArray[j]] = colArray[i];
+                            setColor(i,downArray[j],color[colArray[i]]) ;
+                        }
+
+                        upline[downArray[j]] += blankCount[downArray[j]];
+                    }
+                }
+            }
+
+            function scanHorizon(){
+                var blankColArray = new Array();
+                var unBlankColArray = new Array();
+                
+                var configColArray = new Array();
+                
+                for (j=0;j<rightline;++j){
+                    if (upline[j]==bottomline-1){
+                        blankColArray.push(j);
+                    }
+                    else{
+                        unBlankColArray.push(j);
+                    }
+                }
+                
+                if (blankColArray.length>0){
+                    for(j=0;j<unBlankColArray.length;++j){
+                        if (j !=  unBlankColArray[j]){
+                            copyWholeCol(unBlankColArray[j],j);
+                        }
+                    }
+                    
+                    for(j=1 ; j<blankColArray.length+1 ; ++j){
+                        setWholeColBlank(rightline-j);
+                    }
+                    rightline -= blankColArray.length;              
+                }                
+            }
+
+            function copyWholeCol(pFrom,pTo){
+                for (i=0;i<15;++i){
+                    matrix[i][pTo] = matrix[i][pFrom];
+                    setColor(i,pTo,color[matrix[i][pTo]]);
+                    upline[pTo] = upline[pFrom];
+                }
+            }
+            
+            function setWholeColBlank(pCol){
+                for (i=0;i<15;++i){
+                    matrix[i][pCol] = -1;
+                    setColor(i,pCol,"#000000");
+                    upline[pCol] = bottomline - 1;
+                }                
+            }
+
+            function setColor (p1,p2,pColor){
+                document.getElementById(p1+"_"+p2).style.background = pColor;
+            }
+            
+            function getColor (p1,p2){
+                return document.getElementById(p1+"_"+p2).style.background;
+            }
+            
+            function printMenu(){
+                document.getElementById("clickTimeShow").innerHTML = clickTime;
+                document.getElementById("leftInMatrixShow").innerHTML = leftInMatrix;
+                document.getElementById("colorTypeShow").innerHTML = color.length;
+            }
+            
+            function printSwitch(){
+                document.getElementById("leftSwitchShow").innerHTML = switchColorLeftTime;
+            }
+            
+            function isEnd(){
+                for(i=0;i<15;++i){
+                    for(j=0;j<15;++j){
+                        myColor = matrix[i][j];
+                        if (myColor == -1){
+                            continue;     
+                        }
+                        
+                        if (isSameColor(i-1,j,myColor)){
+                            return false;
+                        }
+                        else if (isSameColor(i,j+1,myColor)){
+                            return false;
+                        } 
+                        else if (isSameColor(i+1,j,myColor)){
+                            return false;
+                        } 
+                        else if (isSameColor(i,j-1,myColor)){
+                            return false;
+                        }
+                        else {
+                            continue;
+                        }
+                    }
+                }
+                
+                return true;
+            }
+            
+            function isSameColor(p1,p2,pColor){
+                if (typeof(matrix[p1]) == 'undefined'){return false;}
+                if (typeof(matrix[p1][p2]) == 'undefined'){return false;}
+                if (matrix[p1][p2] == -1){return false;}
+                if (matrix[p1][p2] == pColor){return true;}
+            }
+            
+            function switchTimer(pTimer){
+                pauseButton = document.getElementById("pause");
+                revertButton = document.getElementById("revert");
+                if (pTimer){
+                    validClick = 1;
+                    pauseHandle = setInterval("timeAdd();",1000);
+                    pauseButton.disabled = '';
+                    revertButton.disabled = 'true';
+                    document.getElementById("bg").style.display='';
+                    document.getElementById("bgpause").style.display='none';
+                }
+                else{
+                    validClick = 0;
+                    clearInterval (pauseHandle);
+                    pauseButton.disabled = 'true';
+                    revertButton.disabled = '';
+                    document.getElementById("bg").style.display='none';
+                    document.getElementById("bgpause").style.display='';                    
+                }
+            }
+            
+            function timeAdd(){
+                ++time;
+                document.getElementById("timeShow").innerHTML = time;
+            }
+            
+            function clearSwitch(){
+                clearInterval(switchColorHandle);
+                switchStatus = 0;
+                if (typeof(switchTmpItem) != 'undefined' && switchTmpItem != null){
+                    setColor(switchTmpItem.i,switchTmpItem.j,color[switchColor]);
+                    switchColor = null;
+                } 
+                switchTmpItem = null;            
+            }
+
+            function endGame(){
+                switchTimer(0);
+                document.getElementById("revert").disabled = 'true';
+                document.getElementById("bg").style.display='';
+                document.getElementById("bgpause").style.display='none';
+                validClick = 0;
+                clearSwitch();
+            }
+        </script>
+    </body>
+</html>
